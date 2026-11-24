@@ -4,6 +4,8 @@ import { isTauri } from "../lib/api";
 
 const win = isTauri ? getCurrentWindow() : null;
 
+const appVersion = __APP_VERSION__;
+
 const minimize = () => win?.minimize();
 const toggleMaximize = () => win?.toggleMaximize();
 const close = () => win?.close();
@@ -24,8 +26,8 @@ const close = () => win?.close();
         >WAN IP Address</span
       >
       <span
-        class="rounded-[4px] border border-brand-line bg-brand-soft px-1 py-px text-[9.5px] font-medium uppercase tracking-[0.08em] text-brand"
-        >v1.1.0</span
+        class="rounded-[4px] border border-brand-line bg-brand-soft px-1 py-px text-[9.5px] font-medium tracking-[0.02em] text-brand"
+        >v{{ appVersion }}</span
       >
     </div>
 

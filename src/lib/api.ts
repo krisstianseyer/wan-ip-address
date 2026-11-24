@@ -28,6 +28,18 @@ export interface LookupResult {
 
 export const isTauri = "__TAURI_INTERNALS__" in window;
 
+export const REPO_URL = "https://github.com/krisstianseyer/wan-ip-address";
+export const REPO_LABEL = "github.com/krisstianseyer/wan-ip-address";
+
+export async function openRepo(): Promise<void> {
+  if (isTauri) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(REPO_URL);
+    return;
+  }
+  window.open(REPO_URL, "_blank", "noopener");
+}
+
 const PREVIEW_KEY = "wan-ip-address:history";
 
 function previewHistory(): HistoryEntry[] {

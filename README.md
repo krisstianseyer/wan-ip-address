@@ -15,7 +15,8 @@ A tiny Windows desktop app that shows your public WAN IP address, copies it in o
 - One-click copy, `Ctrl+Shift+C`
 - Refresh via button or `Ctrl+R`
 - Local history (last 50, IPv4/IPv6 filter), stored in the app data folder
-- Custom frameless title bar, remembered window size and position
+- About block with the GitHub repository link, opened in the default browser
+- Custom frameless title bar with version chip, remembered window size and position
 - No telemetry; only the lookup request leaves the machine
 
 ## Development
@@ -33,5 +34,5 @@ npm run tauri build
 
 Outputs:
 
-- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.1.0_x64-setup.exe`
+- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.2.0_x64-setup.exe`
 - Portable: `src-tauri/target/release/wan-ip-address.exe`

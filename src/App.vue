@@ -11,7 +11,9 @@ import {
   isTauri,
   loadHistory,
   lookupIp,
+  openRepo,
   recordIp,
+  REPO_LABEL,
   timeLabel,
   type HistoryEntry,
   type LookupResult,
@@ -164,14 +166,29 @@ onUnmounted(() => {
       class="mx-1.5 mb-1.5 flex min-h-0 flex-1 flex-col rounded-[20px] border border-line bg-panel px-5 pb-3.5 pt-4"
     >
       <div class="flex items-center justify-between gap-3">
-        <h1 class="text-[20px] font-semibold leading-none tracking-[-0.025em] text-ink">
-          WAN IP Address
-        </h1>
+        <div class="flex min-w-0 items-center gap-1.5 text-[11.5px]">
+          <span
+            class="h-1.5 w-1.5 shrink-0 rounded-full"
+            :class="
+              error
+                ? 'bg-danger'
+                : loading
+                  ? 'bg-[#c2c7cf]'
+                  : 'bg-positive'
+            "
+          />
+          <span class="text-muted">{{ statusLabel }}</span>
+          <template v-if="ip && !error">
+            <span class="text-[#c9cdd4]">·</span>
+            <span class="truncate text-faint">via {{ ip.source }}</span>
+          </template>
+        </div>
+
         <button
           type="button"
           aria-label="Refresh"
           title="Refresh (Ctrl+R)"
-          class="grid h-8 w-8 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft hover:text-brand disabled:opacity-50"
+          class="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft hover:text-brand disabled:opacity-50"
           :disabled="loading"
           @click="check"
         >
@@ -189,24 +206,6 @@ onUnmounted(() => {
             <path d="M20.5 4v5h-5" />
           </svg>
         </button>
-      </div>
-
-      <div class="mt-2 flex items-center gap-1.5 text-[11.5px]">
-        <span
-          class="h-1.5 w-1.5 shrink-0 rounded-full"
-          :class="
-            error
-              ? 'bg-danger'
-              : loading
-                ? 'bg-[#c2c7cf]'
-                : 'bg-positive'
-          "
-        />
-        <span class="text-muted">{{ statusLabel }}</span>
-        <template v-if="ip && !error">
-          <span class="text-[#c9cdd4]">·</span>
-          <span class="truncate text-faint">via {{ ip.source }}</span>
-        </template>
       </div>
 
       <div class="mt-4 rounded-2xl border border-brand-line bg-[#F3FAF6] px-4 pb-3.5 pt-3">
@@ -296,8 +295,51 @@ onUnmounted(() => {
         />
       </div>
 
+      <div class="mt-3 shrink-0 border-t border-line pt-3">
+        <div class="flex items-center gap-2">
+          <span
+            class="grid h-6 w-6 shrink-0 place-items-center rounded-[7px] bg-brand text-[10px] font-semibold tracking-tight text-white"
+            >IP</span
+          >
+          <div class="min-w-0">
+            <p class="text-[12.5px] font-medium leading-tight text-ink">WAN IP Address</p>
+            <p class="mt-0.5 truncate text-[10.5px] leading-tight text-faint">
+              Your public WAN IP, one click away.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="mt-2.5 flex w-full items-center gap-2 rounded-xl border border-line bg-white px-2.5 py-2 text-left transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft"
+          title="Open the repository on GitHub"
+          @click="openRepo"
+        >
+          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 text-muted" fill="currentColor">
+            <path
+              d="M12 2C6.48 2 2 6.58 2 12.26c0 4.5 2.87 8.32 6.84 9.67.5.09.68-.22.68-.49 0-.24-.01-.87-.01-1.7-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.28 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.02 10.02 0 0 0 22 12.26C22 6.58 17.52 2 12 2z"
+            />
+          </svg>
+          <span class="flex-1 truncate text-[12px] font-medium text-muted">View source</span>
+          <svg
+            viewBox="0 0 24 24"
+            class="h-3.5 w-3.5 shrink-0 text-faint"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M7 17L17 7" />
+            <path d="M9 7h8v8" />
+          </svg>
+        </button>
+
+        <p class="mt-1.5 truncate px-0.5 text-[10px] text-faint">{{ REPO_LABEL }}</p>
+      </div>
+
       <div
-        class="flex shrink-0 items-center justify-between border-t border-line pt-2.5 text-[10px] text-faint"
+        class="mt-2.5 flex shrink-0 items-center justify-between border-t border-line pt-2.5 text-[10px] text-faint"
       >
         <span class="inline-flex items-center gap-1">
           <svg viewBox="0 0 24 24" class="h-3 w-3 text-brand" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
