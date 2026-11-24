@@ -1,0 +1,13 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+icon-source.png
+release/
+*.7z
+.DS_Store
+build.log
+preview*.png
+app-preview*.png
+click-*.png
+final-preview.png

@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "SF Mono", ui-monospace, monospace;
+
+  --color-shell: #f8f9fb;
+  --color-panel: #ffffff;
+  --color-ink: #111214;
+  --color-muted: #6b7280;
+  --color-faint: #8a8f98;
+  --color-line: #e5e7eb;
+  --color-fill: #ebedf0;
+  --color-primary: #0f1117;
+  --color-positive: #22a06b;
+  --color-danger: #c2413a;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    font-size: 15px;
+    user-select: none;
+    cursor: default;
+  }
+
+  ::selection {
+    background: #dfe3ea;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: default;
+  }
+
+  *:focus-visible {
+    outline: 1px solid #9aa0aa;
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #dfe2e7;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #ccd0d6;
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+}
+
+@layer components {
+  .hairline {
+    border: 1px solid var(--color-line);
+  }
+}

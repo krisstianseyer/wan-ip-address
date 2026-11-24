@@ -1,0 +1,115 @@
+import { invoke } from "@tauri-apps/api/core";
+
+export interface IpInfo {
+  ip: string;
+  version: 4 | 6;
+  source: string;
+  checkedAt: string;
+}
+
+export interface HistoryEntry extends IpInfo {
+  id: string;
+}
+
+export interface WindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  maximized: boolean;
+}
+
+export interface LookupResult {
+  ip: string;
+  version: 4 | 6;
+  source: string;
+  checkedAt: string;
+}
+
+export const isTauri = "__TAURI_INTERNALS__" in window;
+
+const PREVIEW_KEY = "wan-ip-address:history";
+
+function previewHistory(): HistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(PREVIEW_KEY);
+    return raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePreview(entries: HistoryEntry[]): HistoryEntry[] {
+  localStorage.setItem(PREVIEW_KEY, JSON.stringify(entries));
+  return entries;
+}
+
+export async function lookupIp(): Promise<LookupResult> {
+  if (isTauri) return invoke<LookupResult>("lookup_ip");
+
+  const response = await fetch("https://api.ipify.org?format=json", {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("Could not retrieve your WAN IP address.");
+  const body = (await response.json()) as { ip: string };
+  return {
+    ip: body.ip,
+    version: body.ip.includes(":") ? 6 : 4,
+    source: "api.ipify.org",
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+export async function loadHistory(): Promise<HistoryEntry[]> {
+  if (isTauri) return invoke<HistoryEntry[]>("load_history");
+  return previewHistory();
+}
+
+export async function recordIp(entry: LookupResult): Promise<HistoryEntry[]> {
+  if (isTauri) return invoke<HistoryEntry[]>("record_ip", { entry });
+
+  const history = previewHistory();
+  const id = `${entry.checkedAt}-${entry.ip}`;
+  if (history[0]?.ip === entry.ip) {
+    Object.assign(history[0], entry, { id });
+  } else {
+    history.unshift({ id, ...entry });
+  }
+  return savePreview(history.slice(0, 50));
+}
+
+export async function clearHistory(): Promise<void> {
+  if (isTauri) return invoke("clear_history");
+  localStorage.removeItem(PREVIEW_KEY);
+}
+
+export async function getWindowState(): Promise<WindowState | null> {
+  if (!isTauri) return null;
+  return invoke<WindowState | null>("get_window_state");
+}
+
+export function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} d ago`;
+  return new Date(then).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function timeLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
