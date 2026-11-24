@@ -171,7 +171,7 @@ onUnmounted(() => {
           type="button"
           aria-label="Refresh"
           title="Refresh (Ctrl+R)"
-          class="grid h-8 w-8 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:bg-shell hover:text-ink disabled:opacity-50"
+          class="grid h-8 w-8 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft hover:text-brand disabled:opacity-50"
           :disabled="loading"
           @click="check"
         >
@@ -209,14 +209,14 @@ onUnmounted(() => {
         </template>
       </div>
 
-      <div class="mt-4 rounded-2xl border border-line bg-[#FBFBFC] px-4 pb-3.5 pt-3">
+      <div class="mt-4 rounded-2xl border border-brand-line bg-[#F3FAF6] px-4 pb-3.5 pt-3">
         <div class="flex items-center justify-between">
-          <span class="text-[10px] font-medium uppercase tracking-[0.12em] text-faint"
+          <span class="text-[10px] font-medium uppercase tracking-[0.12em] text-brand"
             >Public address</span
           >
           <span
             v-if="ip"
-            class="rounded-[5px] border border-line bg-white px-1.5 py-0.5 font-mono text-[9.5px] font-medium text-muted"
+            class="rounded-[5px] border border-brand-line bg-white px-1.5 py-0.5 font-mono text-[9.5px] font-medium text-brand"
             >IPv{{ ip.version }}</span
           >
         </div>
@@ -228,7 +228,7 @@ onUnmounted(() => {
 
         <p
           v-else-if="ip"
-          class="mt-1 select-text break-all font-mono font-medium tracking-[-0.02em] text-ink"
+          class="mt-1 select-text break-all font-mono font-medium tracking-[-0.02em] tabular-nums text-brand-strong"
           :class="ipSize"
         >
           {{ ip.ip }}
@@ -251,7 +251,7 @@ onUnmounted(() => {
 
           <button
             type="button"
-            class="flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] bg-primary px-3 text-[12px] font-medium text-white transition-colors duration-100 hover:bg-black disabled:bg-[#c9cdd4]"
+            class="flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] bg-brand px-3 text-[12px] font-medium text-white transition-colors duration-100 hover:bg-brand-strong disabled:bg-[#c3d6cb]"
             :disabled="!ip"
             @click="copyCurrent"
           >
@@ -300,13 +300,13 @@ onUnmounted(() => {
         class="flex shrink-0 items-center justify-between border-t border-line pt-2.5 text-[10px] text-faint"
       >
         <span class="inline-flex items-center gap-1">
-          <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <svg viewBox="0 0 24 24" class="h-3 w-3 text-brand" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
             <rect x="4.5" y="10.5" width="15" height="10" rx="2.2" />
             <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
           </svg>
           Stored on this device
         </span>
-        <span class="tabular-nums">{{ history.length }}/50 saved</span>
+        <span class="tabular-nums text-brand">{{ history.length }}/50 saved</span>
       </div>
     </main>
   </div>

@@ -52,7 +52,7 @@ const tabs = [
         >
         <span
           v-if="history.length"
-          class="rounded-full bg-shell px-1.5 py-px text-[10px] font-medium tabular-nums text-faint"
+          class="rounded-full bg-brand-soft px-1.5 py-px text-[10px] font-medium tabular-nums text-brand"
           >{{ history.length }}</span
         >
       </div>
@@ -85,8 +85,8 @@ const tabs = [
         class="rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors duration-100"
         :class="
           filter === tab.key
-            ? 'bg-fill text-ink'
-            : 'text-faint hover:bg-fill/60 hover:text-muted'
+            ? 'bg-brand text-white'
+            : 'text-faint hover:bg-brand-soft hover:text-brand'
         "
         @click="filter = tab.key"
       >
@@ -102,12 +102,12 @@ const tabs = [
         v-for="entry in items"
         :key="entry.id"
         type="button"
-        class="group mb-0.5 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors duration-100 hover:bg-fill/70"
+        class="group mb-0.5 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors duration-100 hover:bg-brand-soft/70"
         :title="`Copy ${entry.ip}`"
         @click="emit('copy', entry)"
       >
         <span
-          class="w-6 shrink-0 rounded-[4px] border border-line py-px text-center font-mono text-[9.5px] font-medium text-faint"
+          class="w-6 shrink-0 rounded-[4px] border border-brand-line bg-brand-soft/60 py-px text-center font-mono text-[9.5px] font-medium text-brand"
           >v{{ entry.version }}</span
         >
         <span class="min-w-0 flex-1 truncate font-mono text-[12.5px] tracking-[-0.01em] text-ink/90">{{
@@ -130,8 +130,8 @@ const tabs = [
       v-else
       class="flex min-h-0 flex-1 flex-col items-center justify-center pb-6 text-center"
     >
-      <div class="mb-2.5 grid h-11 w-11 place-items-center rounded-full bg-shell">
-        <svg viewBox="0 0 24 24" class="h-[22px] w-[22px] text-[#9aa0aa]" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round">
+      <div class="mb-2.5 grid h-11 w-11 place-items-center rounded-full bg-brand-soft">
+        <svg viewBox="0 0 24 24" class="h-[22px] w-[22px] text-brand" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7.2V12l3.1 2" />
         </svg>
@@ -148,7 +148,7 @@ const tabs = [
       </p>
       <button
         type="button"
-        class="mt-3 rounded-xl border border-line bg-white px-3 py-1.5 text-[12px] font-medium text-ink transition-colors duration-100 hover:bg-shell"
+        class="mt-3 rounded-xl border border-brand-line bg-white px-3 py-1.5 text-[12px] font-medium text-brand transition-colors duration-100 hover:bg-brand hover:text-white"
         @click="emit('check')"
       >
         Check now

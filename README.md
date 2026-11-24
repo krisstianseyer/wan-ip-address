@@ -6,7 +6,7 @@ A tiny Windows desktop app that shows your public WAN IP address, copies it in o
 
 - Tauri v2 (Rust backend)
 - Vue 3 + TypeScript + Vite
-- Tailwind CSS v4, Inter
+- Tailwind CSS v4, Verdana
 - Public lookup via `api.ipify.org` with `api64.ipify.org` fallback
 
 ## Features
@@ -33,5 +33,5 @@ npm run tauri build
 
 Outputs:
 
-- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.0.0_x64-setup.exe`
+- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.1.0_x64-setup.exe`
 - Portable: `src-tauri/target/release/wan-ip-address.exe`

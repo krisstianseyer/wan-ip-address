@@ -17,15 +17,15 @@ const close = () => win?.close();
   >
     <div data-tauri-drag-region class="flex min-w-0 items-center gap-2">
       <span
-        class="grid h-4.5 w-4.5 place-items-center rounded-[5px] bg-primary text-[9px] font-semibold tracking-tight text-white"
+        class="grid h-4.5 w-4.5 place-items-center rounded-[5px] bg-brand text-[9px] font-semibold tracking-tight text-white"
         >IP</span
       >
       <span class="truncate text-[12.5px] font-medium tracking-[-0.01em] text-ink/80"
         >WAN IP Address</span
       >
       <span
-        class="rounded-[4px] border border-line/80 bg-white/60 px-1 py-px text-[9.5px] font-medium uppercase tracking-[0.08em] text-faint"
-        >v1.0.0</span
+        class="rounded-[4px] border border-brand-line bg-brand-soft px-1 py-px text-[9.5px] font-medium uppercase tracking-[0.08em] text-brand"
+        >v1.1.0</span
       >
     </div>
 
@@ -33,7 +33,7 @@ const close = () => win?.close();
       <button
         type="button"
         aria-label="Minimize"
-        class="grid h-8 w-9 place-items-center rounded-md text-muted transition-colors duration-100 hover:bg-fill hover:text-ink"
+        class="grid h-8 w-9 place-items-center rounded-md text-muted transition-colors duration-100 hover:bg-brand-soft hover:text-brand"
         @click="minimize"
       >
         <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
@@ -43,7 +43,7 @@ const close = () => win?.close();
       <button
         type="button"
         aria-label="Maximize"
-        class="grid h-8 w-9 place-items-center rounded-md text-muted transition-colors duration-100 hover:bg-fill hover:text-ink"
+        class="grid h-8 w-9 place-items-center rounded-md text-muted transition-colors duration-100 hover:bg-brand-soft hover:text-brand"
         @click="toggleMaximize"
       >
         <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="1.6">
