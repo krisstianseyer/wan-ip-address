@@ -34,5 +34,5 @@ npm run tauri build
 
 Outputs:
 
-- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.3.0_x64-setup.exe`
+- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.0.3_x64-setup.exe`
 - Portable: `src-tauri/target/release/wan-ip-address.exe`
