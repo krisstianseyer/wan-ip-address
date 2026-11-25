@@ -4812,7 +4812,7 @@ dependencies = [
 
 [[package]]
 name = "wan-ip-address"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",

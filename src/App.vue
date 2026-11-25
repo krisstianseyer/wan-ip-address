@@ -295,17 +295,6 @@ onUnmounted(() => {
         />
       </div>
 
-      <div class="mt-3 shrink-0 border-t border-line pt-2.5">
-        <button
-          type="button"
-          class="block max-w-full truncate rounded-[3px] px-0.5 text-left text-[10px] text-faint transition-colors duration-100 hover:text-brand"
-          title="Open the repository on GitHub"
-          @click="openRepo"
-        >
-          {{ REPO_LABEL }}
-        </button>
-      </div>
-
       <div
         class="mt-2.5 flex shrink-0 items-center justify-between border-t border-line pt-2.5 text-[10px] text-faint"
       >
@@ -317,6 +306,17 @@ onUnmounted(() => {
           Stored on this device
         </span>
         <span class="tabular-nums text-brand">{{ history.length }}/50 saved</span>
+      </div>
+
+      <div class="mt-2 shrink-0">
+        <button
+          type="button"
+          class="block max-w-full truncate rounded-[3px] px-0.5 text-left text-[10px] text-faint transition-colors duration-100 hover:text-brand"
+          title="Open the repository on GitHub"
+          @click="openRepo"
+        >
+          {{ REPO_LABEL }}
+        </button>
       </div>
     </main>
   </div>
