@@ -1,6 +1,6 @@
 [package]
 name = "wan-ip-address"
-version = "1.2.0"
+version = "1.3.0"
 description = "Tiny desktop app that shows your public WAN IP address"
 authors = ["Krisstian"]
 edition = "2021"
