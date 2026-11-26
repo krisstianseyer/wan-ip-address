@@ -1,10 +1,10 @@
 [package]
 name = "wan-ip-address"
-version = "1.1.0"
+version = "1.1.1"
 description = "Tiny desktop app that shows your public WAN IP address"
 authors = ["Krisstian"]
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.90"
 
 [lib]
 name = "wan_ip_address_lib"

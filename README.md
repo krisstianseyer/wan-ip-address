@@ -32,11 +32,28 @@ npm run tauri dev
 
 ## Build
 
+Windows:
+
 ```bash
 npm run tauri build
 ```
 
-Outputs:
-
-- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.1.0_x64-setup.exe`
+- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.1.1_x64-setup.exe`
 - Portable: `src-tauri/target/release/wan-ip-address.exe`
+
+macOS (universal, run on macOS):
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri build -- --target universal-apple-darwin --bundles dmg
+```
+
+Linux (run on Linux):
+
+```bash
+npm run tauri build -- --bundles appimage,deb
+```
+
+The `Release` GitHub Actions workflow builds the macOS and Linux packages on native runners and
+attaches them to the same GitHub Release when a `v*` tag is pushed. Builds are unsigned; macOS
+users must approve the app on first launch.

@@ -1,0 +1,163 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and upload (for example v1.1.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "WAN IP Address $VERSION" \
+              --notes "Cross-platform desktop builds for Windows, macOS, and Linux." \
+              --verify-tag
+          fi
+
+  macos:
+    name: macOS universal DMG
+    needs: prepare
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build universal DMG
+        run: npm run tauri build -- --target universal-apple-darwin --bundles dmg
+
+      - name: Upload macOS build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          DMG="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$DMG"
+          OUT="WAN-IP-Address_${VERSION}_macos_universal.dmg"
+          cp "$DMG" "$OUT"
+          gh release upload "$RELEASE_TAG" "$OUT" --repo "$GITHUB_REPOSITORY" --clobber
+
+  linux:
+    name: Linux AppImage and deb
+    needs: prepare
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libfuse2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build AppImage and deb
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npm run tauri build -- --bundles appimage,deb
+
+      - name: Upload Linux builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          APPIMAGE="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          DEB="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$APPIMAGE"
+          test -n "$DEB"
+          OUT_APPIMAGE="WAN-IP-Address_${VERSION}_linux_amd64.AppImage"
+          OUT_DEB="WAN-IP-Address_${VERSION}_linux_amd64.deb"
+          cp "$APPIMAGE" "$OUT_APPIMAGE"
+          cp "$DEB" "$OUT_DEB"
+          gh release upload "$RELEASE_TAG" "$OUT_APPIMAGE" "$OUT_DEB" --repo "$GITHUB_REPOSITORY" --clobber
+
+  checksums:
+    name: Release checksums
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate and upload SHA-256 checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          mkdir -p assets
+          cd assets
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern '*.7z' --pattern '*.exe' --pattern '*.dmg' --pattern '*.AppImage' --pattern '*.deb' \
+            --clobber
+          find . -maxdepth 1 -type f -printf '%f\n' | sort | while read -r file; do
+            sha256sum "$file"
+          done > "../WAN-IP-Address_${VERSION}_SHA256SUMS.txt"
+          cd ..
+          cat "WAN-IP-Address_${VERSION}_SHA256SUMS.txt"
+          gh release upload "$RELEASE_TAG" "WAN-IP-Address_${VERSION}_SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" --clobber
