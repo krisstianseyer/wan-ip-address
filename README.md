@@ -9,6 +9,7 @@ A tiny Windows desktop app that shows your public WAN IP address, copies it in o
 - Tailwind CSS v4, Verdana
 - Public lookup via `api.ipify.org` with `api64.ipify.org` fallback
 - Native notifications via `tauri-plugin-notification`
+- Start at login via `tauri-plugin-autostart`
 
 ## Features
 
@@ -18,6 +19,7 @@ A tiny Windows desktop app that shows your public WAN IP address, copies it in o
 - Optional automatic checks every 5, 10, 15, 30 or 60 minutes
 - Windows notification and in-app banner when the address changes
 - Settings to show or hide automatically checked addresses in History
+- Optional start at login, with an option to open hidden in the system tray
 - Local history (last 50, IPv4/IPv6 filter), stored in the app data folder
 - GitHub repository link, opened in the default browser
 - Custom frameless title bar with version chip, remembered window size and position

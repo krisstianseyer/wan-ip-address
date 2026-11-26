@@ -9,7 +9,10 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WindowEvent,
 };
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_notification::NotificationExt;
+
+const AUTOSTART_ARG: &str = "--autostart";
 
 const SOURCES: [&str; 2] = [
     "https://api.ipify.org?format=json",
@@ -58,6 +61,10 @@ pub struct Settings {
     pub show_auto_checks: bool,
     #[serde(default = "default_minimize_to_tray")]
     pub minimize_to_tray: bool,
+    #[serde(default)]
+    pub start_on_login: bool,
+    #[serde(default)]
+    pub start_hidden_at_login: bool,
 }
 
 fn default_minimize_to_tray() -> bool {
@@ -72,6 +79,8 @@ impl Default for Settings {
             notify_on_change: true,
             show_auto_checks: true,
             minimize_to_tray: false,
+            start_on_login: false,
+            start_hidden_at_login: false,
         }
     }
 }
@@ -234,18 +243,48 @@ fn record_ip(app: AppHandle, entry: LookupResult, auto: bool) -> Result<Vec<Hist
 
 #[tauri::command]
 fn load_settings(app: AppHandle) -> Settings {
-    read_state(&app).settings.normalized()
+    let mut settings = read_state(&app).settings.normalized();
+    if let Ok(enabled) = app.autolaunch().is_enabled() {
+        settings.start_on_login = enabled;
+    }
+    settings
 }
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
-    let settings = settings.normalized();
+    let mut settings = settings.normalized();
+    let enabled = app.autolaunch().is_enabled().unwrap_or(false);
+    if settings.start_on_login != enabled {
+        let result = if settings.start_on_login {
+            app.autolaunch().enable()
+        } else {
+            app.autolaunch().disable()
+        };
+        result.map_err(|err| format!("Could not update the startup setting: {err}"))?;
+    }
+    if let Ok(actual) = app.autolaunch().is_enabled() {
+        settings.start_on_login = actual;
+    }
+
     let mut state = read_state(&app);
     state.settings = settings.clone();
     write_state(&app, &state)?;
     apply_tray_visibility(&app);
     app.state::<AutoCheckSignal>().0.notify_one();
     Ok(settings)
+}
+
+fn launched_at_login() -> bool {
+    std::env::args().any(|arg| arg == AUTOSTART_ARG)
+}
+
+fn hidden_start_requested(app: &AppHandle) -> bool {
+    launched_at_login() && read_state(app).settings.start_hidden_at_login
+}
+
+#[tauri::command]
+fn should_start_hidden(app: AppHandle) -> bool {
+    hidden_start_requested(&app)
 }
 
 async fn auto_check_now(app: &AppHandle) {
@@ -377,7 +416,7 @@ fn hide_to_tray(app: AppHandle) -> Result<(), String> {
 }
 
 fn apply_tray_visibility(app: &AppHandle) {
-    let enabled = read_state(app).settings.minimize_to_tray;
+    let enabled = read_state(app).settings.minimize_to_tray || hidden_start_requested(app);
     if let Some(tray) = app.tray_by_id("main-tray") {
         let _ = tray.set_visible(enabled);
     }
@@ -426,6 +465,10 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {    let show = MenuItem::w
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![AUTOSTART_ARG]),
+        ))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -437,7 +480,8 @@ pub fn run() {
             get_window_state,
             load_settings,
             save_settings,
-            hide_to_tray
+            hide_to_tray,
+            should_start_hidden
         ])
         .setup(|app| {
             app.manage(AutoCheckSignal::default());

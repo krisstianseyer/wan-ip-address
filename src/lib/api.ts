@@ -33,6 +33,8 @@ export interface Settings {
   notifyOnChange: boolean;
   showAutoChecks: boolean;
   minimizeToTray: boolean;
+  startOnLogin: boolean;
+  startHiddenAtLogin: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyOnChange: true,
   showAutoChecks: true,
   minimizeToTray: false,
+  startOnLogin: false,
+  startHiddenAtLogin: false,
 };
 
 export const INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
@@ -151,6 +155,11 @@ export async function getWindowState(): Promise<WindowState | null> {
 export async function hideToTray(): Promise<void> {
   if (!isTauri) return;
   await invoke("hide_to_tray");
+}
+
+export async function shouldStartHidden(): Promise<boolean> {
+  if (!isTauri) return false;
+  return invoke<boolean>("should_start_hidden");
 }
 
 export function relativeTime(iso: string): string {

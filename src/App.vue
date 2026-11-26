@@ -21,6 +21,7 @@ import {
   recordIp,
   REPO_LABEL,
   saveSettings,
+  shouldStartHidden,
   timeLabel,
   type AutoCheckEvent,
   type HistoryEntry,
@@ -116,7 +117,13 @@ async function updateSettings(patch: Partial<Settings>): Promise<void> {
     const saved = await saveSettings(next);
     if (token === saveToken) settings.value = saved;
   } catch {
-    /* keep the local preference if the state file cannot be written */
+    if (token === saveToken) {
+      try {
+        settings.value = await loadSettings();
+      } catch {
+        /* keep the current view if the state file cannot be read */
+      }
+    }
   } finally {
     if (token === saveToken) savingSettings.value = false;
   }
@@ -202,6 +209,12 @@ onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
 
   if (win) {
+    let startHidden = false;
+    try {
+      startHidden = await shouldStartHidden();
+    } catch {
+      /* show the window if the startup mode cannot be read */
+    }
     try {
       const saved = await getWindowState();
       if (saved) {
@@ -212,7 +225,7 @@ onMounted(async () => {
     } catch {
       /* fall back to the centered default size */
     } finally {
-      await win.show();
+      if (!startHidden) await win.show();
     }
   }
 

@@ -57,7 +57,7 @@ function onIntervalChange(event: Event): void {
       Automatic checks run quietly while the app is open.
     </p>
 
-    <div class="mt-3 space-y-2">
+    <div class="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
       <div class="rounded-2xl border border-line px-3.5 py-3">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
@@ -130,6 +130,66 @@ function onIntervalChange(event: Event): void {
             :class="settings.notifyOnChange ? 'left-[19px]' : 'left-[2px]'"
           />
         </button>
+      </div>
+
+      <div class="rounded-2xl border border-line px-3.5 py-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[12.5px] font-medium text-ink">Start automatically at login</p>
+            <p class="mt-0.5 text-[10.5px] leading-4 text-faint">
+              Open WAN IP Address when you sign in to your computer.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-label="Start automatically at login"
+            :aria-checked="settings.startOnLogin"
+            class="relative h-[22px] w-[38px] shrink-0 rounded-full border transition-colors duration-150"
+            :class="
+              settings.startOnLogin
+                ? 'border-brand bg-brand'
+                : 'border-[#d5ddd7] bg-[#e8eeea]'
+            "
+            @click="emit('update', { startOnLogin: !settings.startOnLogin })"
+          >
+            <span
+              class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-all duration-150"
+              :class="settings.startOnLogin ? 'left-[19px]' : 'left-[2px]'"
+            />
+          </button>
+        </div>
+
+        <div
+          class="mt-2.5 flex items-center justify-between gap-3 border-t border-line pt-2.5 transition-opacity duration-150"
+          :class="{ 'opacity-45': !settings.startOnLogin }"
+        >
+          <div class="min-w-0">
+            <p class="text-[11.5px] text-muted">Start hidden in the system tray</p>
+            <p class="mt-0.5 text-[10.5px] leading-4 text-faint">
+              Do not open the window when launched at login.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-label="Start hidden in the system tray"
+            :aria-checked="settings.startHiddenAtLogin"
+            :disabled="!settings.startOnLogin"
+            class="relative h-[22px] w-[38px] shrink-0 rounded-full border transition-colors duration-150 disabled:cursor-not-allowed"
+            :class="
+              settings.startHiddenAtLogin
+                ? 'border-brand bg-brand'
+                : 'border-[#d5ddd7] bg-[#e8eeea]'
+            "
+            @click="emit('update', { startHiddenAtLogin: !settings.startHiddenAtLogin })"
+          >
+            <span
+              class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-all duration-150"
+              :class="settings.startHiddenAtLogin ? 'left-[19px]' : 'left-[2px]'"
+            />
+          </button>
+        </div>
       </div>
 
       <div class="flex items-start justify-between gap-3 rounded-2xl border border-line px-3.5 py-3">
