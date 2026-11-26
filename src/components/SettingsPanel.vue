@@ -134,6 +134,33 @@ function onIntervalChange(event: Event): void {
 
       <div class="flex items-start justify-between gap-3 rounded-2xl border border-line px-3.5 py-3">
         <div class="min-w-0">
+          <p class="text-[12.5px] font-medium text-ink">Minimize to system tray</p>
+          <p class="mt-0.5 text-[10.5px] leading-4 text-faint">
+            Keep running in the background. Click the tray icon to reopen.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-label="Minimize to system tray"
+          :aria-checked="settings.minimizeToTray"
+          class="relative h-[22px] w-[38px] shrink-0 rounded-full border transition-colors duration-150"
+          :class="
+            settings.minimizeToTray
+              ? 'border-brand bg-brand'
+              : 'border-[#d5ddd7] bg-[#e8eeea]'
+          "
+          @click="emit('update', { minimizeToTray: !settings.minimizeToTray })"
+        >
+          <span
+            class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-all duration-150"
+            :class="settings.minimizeToTray ? 'left-[19px]' : 'left-[2px]'"
+          />
+        </button>
+      </div>
+
+      <div class="flex items-start justify-between gap-3 rounded-2xl border border-line px-3.5 py-3">
+        <div class="min-w-0">
           <p class="text-[12.5px] font-medium text-ink">Show auto-checks in History</p>
           <p class="mt-0.5 text-[10.5px] leading-4 text-faint">
             List periodically checked IPs in the history section.

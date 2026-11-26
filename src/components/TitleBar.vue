@@ -1,12 +1,22 @@
 <script setup lang="ts">
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isTauri } from "../lib/api";
+import { hideToTray, isTauri } from "../lib/api";
+
+const props = withDefaults(defineProps<{ minimizeToTray?: boolean }>(), {
+  minimizeToTray: false,
+});
 
 const win = isTauri ? getCurrentWindow() : null;
 
 const appVersion = __APP_VERSION__;
 
-const minimize = () => win?.minimize();
+const minimize = () => {
+  if (props.minimizeToTray) {
+    void hideToTray();
+    return;
+  }
+  void win?.minimize();
+};
 const toggleMaximize = () => win?.toggleMaximize();
 const close = () => win?.close();
 </script>
@@ -34,7 +44,8 @@ const close = () => win?.close();
     <div class="flex items-center">
       <button
         type="button"
-        aria-label="Minimize"
+        :aria-label="minimizeToTray ? 'Minimize to system tray' : 'Minimize'"
+        :title="minimizeToTray ? 'Minimize to system tray' : 'Minimize'"
         class="grid h-8 w-9 place-items-center rounded-md text-muted transition-colors duration-100 hover:bg-brand-soft hover:text-brand"
         @click="minimize"
       >

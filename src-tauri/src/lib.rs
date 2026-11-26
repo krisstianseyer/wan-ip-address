@@ -1,10 +1,15 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, WindowEvent,
+};
 use tauri_plugin_notification::NotificationExt;
 
 const SOURCES: [&str; 2] = [
@@ -52,6 +57,12 @@ pub struct Settings {
     pub interval_minutes: u32,
     pub notify_on_change: bool,
     pub show_auto_checks: bool,
+    #[serde(default = "default_minimize_to_tray")]
+    pub minimize_to_tray: bool,
+}
+
+fn default_minimize_to_tray() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -61,6 +72,7 @@ impl Default for Settings {
             interval_minutes: 10,
             notify_on_change: true,
             show_auto_checks: true,
+            minimize_to_tray: true,
         }
     }
 }
@@ -89,6 +101,9 @@ impl Default for AutoCheckSignal {
         Self(tokio::sync::Notify::new())
     }
 }
+
+#[derive(Default)]
+struct TrayRestore(AtomicBool);
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -306,6 +321,87 @@ fn get_window_state(app: AppHandle) -> Option<WindowState> {
     read_state(&app).window
 }
 
+fn show_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+
+    app.state::<TrayRestore>().0.store(true, Ordering::SeqCst);
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        handle.state::<TrayRestore>().0.store(false, Ordering::SeqCst);
+    });
+}
+
+fn toggle_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+
+    let visible = window.is_visible().unwrap_or(false);
+    let minimized = window.is_minimized().unwrap_or(false);
+
+    if visible && !minimized {
+        let _ = window.hide();
+    } else {
+        show_main_window(app);
+    }
+}
+
+#[tauri::command]
+fn hide_to_tray(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window is not available".to_string())?;
+    window.hide().map_err(|err| err.to_string())
+}
+
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "Show WAN IP Address", true, None::<&str>)?;
+    let check = MenuItem::with_id(app, "check", "Check now", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &check, &quit])?;
+
+    let mut builder = TrayIconBuilder::with_id("main-tray")
+        .tooltip("WAN IP Address")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "check" => {
+                show_main_window(app);
+                let handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    auto_check_now(&handle).await;
+                });
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+
+    builder.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -319,47 +415,60 @@ pub fn run() {
             clear_history,
             get_window_state,
             load_settings,
-            save_settings
+            save_settings,
+            hide_to_tray
         ])
         .setup(|app| {
             app.manage(AutoCheckSignal::default());
+            app.manage(TrayRestore::default());
             start_auto_check(app.handle().clone());
+            setup_tray(app)?;
 
             if let Some(window) = app.get_webview_window("main") {
                 let handle = app.handle().clone();
                 let tracked = window.clone();
                 window.on_window_event(move |event| {
-                    if !matches!(event, WindowEvent::CloseRequested { .. }) {
-                        return;
-                    }
-                    let maximized = tracked.is_maximized().unwrap_or(false);
-                    let mut state = read_state(&handle);
-
-                    if maximized {
-                        if let Some(window_state) = state.window.as_mut() {
-                            window_state.maximized = true;
-                        } else {
-                            state.window = Some(WindowState {
-                                x: 120,
-                                y: 120,
-                                width: 420,
-                                height: 560,
-                                maximized: true,
-                            });
+                    match event {
+                        WindowEvent::Resized(_) => {
+                            if tracked.is_minimized().unwrap_or(false)
+                                && read_state(&handle).settings.minimize_to_tray
+                                && !handle.state::<TrayRestore>().0.load(Ordering::SeqCst)
+                            {
+                                let _ = tracked.hide();
+                            }
                         }
-                    } else if let (Ok(position), Ok(size)) =
-                        (tracked.outer_position(), tracked.inner_size())
-                    {
-                        state.window = Some(WindowState {
-                            x: position.x,
-                            y: position.y,
-                            width: size.width,
-                            height: size.height,
-                            maximized: false,
-                        });
-                    }
+                        WindowEvent::CloseRequested { .. } => {
+                            let maximized = tracked.is_maximized().unwrap_or(false);
+                            let mut state = read_state(&handle);
 
-                    let _ = write_state(&handle, &state);
+                            if maximized {
+                                if let Some(window_state) = state.window.as_mut() {
+                                    window_state.maximized = true;
+                                } else {
+                                    state.window = Some(WindowState {
+                                        x: 120,
+                                        y: 120,
+                                        width: 420,
+                                        height: 560,
+                                        maximized: true,
+                                    });
+                                }
+                            } else if let (Ok(position), Ok(size)) =
+                                (tracked.outer_position(), tracked.inner_size())
+                            {
+                                state.window = Some(WindowState {
+                                    x: position.x,
+                                    y: position.y,
+                                    width: size.width,
+                                    height: size.height,
+                                    maximized: false,
+                                });
+                            }
+
+                            let _ = write_state(&handle, &state);
+                        }
+                        _ => {}
+                    }
                 });
             }
             Ok(())

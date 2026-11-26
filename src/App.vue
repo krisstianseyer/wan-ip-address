@@ -254,7 +254,7 @@ onUnmounted(() => {
   <div
     class="flex h-full flex-col overflow-hidden rounded-[12px] border border-[#E1E4E9] bg-shell"
   >
-    <TitleBar />
+    <TitleBar :minimize-to-tray="settings.minimizeToTray" />
 
     <main
       class="mx-1.5 mb-1.5 flex min-h-0 flex-1 flex-col rounded-[20px] border border-line bg-panel px-5 pb-3.5 pt-4"

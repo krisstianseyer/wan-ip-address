@@ -32,6 +32,7 @@ export interface Settings {
   intervalMinutes: number;
   notifyOnChange: boolean;
   showAutoChecks: boolean;
+  minimizeToTray: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 10,
   notifyOnChange: true,
   showAutoChecks: true,
+  minimizeToTray: true,
 };
 
 export const INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
@@ -144,6 +146,11 @@ export async function saveSettings(settings: Settings): Promise<Settings> {
 export async function getWindowState(): Promise<WindowState | null> {
   if (!isTauri) return null;
   return invoke<WindowState | null>("get_window_state");
+}
+
+export async function hideToTray(): Promise<void> {
+  if (!isTauri) return;
+  await invoke("hide_to_tray");
 }
 
 export function relativeTime(iso: string): string {
