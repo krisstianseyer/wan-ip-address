@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use chrono::{SecondsFormat, Utc};
@@ -62,7 +61,7 @@ pub struct Settings {
 }
 
 fn default_minimize_to_tray() -> bool {
-    true
+    false
 }
 
 impl Default for Settings {
@@ -72,7 +71,7 @@ impl Default for Settings {
             interval_minutes: 10,
             notify_on_change: true,
             show_auto_checks: true,
-            minimize_to_tray: true,
+            minimize_to_tray: false,
         }
     }
 }
@@ -101,9 +100,6 @@ impl Default for AutoCheckSignal {
         Self(tokio::sync::Notify::new())
     }
 }
-
-#[derive(Default)]
-struct TrayRestore(AtomicBool);
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -247,6 +243,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, String>
     let mut state = read_state(&app);
     state.settings = settings.clone();
     write_state(&app, &state)?;
+    apply_tray_visibility(&app);
     app.state::<AutoCheckSignal>().0.notify_one();
     Ok(settings)
 }
@@ -316,26 +313,44 @@ fn clear_history(app: AppHandle) -> Result<(), String> {
     write_state(&app, &state)
 }
 
+fn window_state_on_screen(app: &AppHandle, state: &WindowState) -> bool {
+    let Ok(monitors) = app.available_monitors() else {
+        return true;
+    };
+    if monitors.is_empty() {
+        return true;
+    }
+
+    const MIN_OVERLAP: i32 = 80;
+    let left = state.x;
+    let top = state.y;
+    let right = state.x + state.width as i32;
+    let bottom = state.y + state.height as i32;
+
+    monitors.iter().any(|monitor| {
+        let origin = monitor.position();
+        let size = monitor.size();
+        let overlap_w = right.min(origin.x + size.width as i32) - left.max(origin.x);
+        let overlap_h = bottom.min(origin.y + size.height as i32) - top.max(origin.y);
+        overlap_w >= MIN_OVERLAP && overlap_h >= MIN_OVERLAP
+    })
+}
+
 #[tauri::command]
 fn get_window_state(app: AppHandle) -> Option<WindowState> {
-    read_state(&app).window
+    let state = read_state(&app).window?;
+    if state.width < 200 || state.height < 200 || !window_state_on_screen(&app, &state) {
+        return None;
+    }
+    Some(state)
 }
 
 fn show_main_window(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-
-    app.state::<TrayRestore>().0.store(true, Ordering::SeqCst);
-    let _ = window.unminimize();
-    let _ = window.show();
-    let _ = window.set_focus();
-
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(800)).await;
-        handle.state::<TrayRestore>().0.store(false, Ordering::SeqCst);
-    });
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 fn toggle_main_window(app: &AppHandle) {
@@ -361,8 +376,14 @@ fn hide_to_tray(app: AppHandle) -> Result<(), String> {
     window.hide().map_err(|err| err.to_string())
 }
 
-fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Show WAN IP Address", true, None::<&str>)?;
+fn apply_tray_visibility(app: &AppHandle) {
+    let enabled = read_state(app).settings.minimize_to_tray;
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_visible(enabled);
+    }
+}
+
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {    let show = MenuItem::with_id(app, "show", "Show WAN IP Address", true, None::<&str>)?;
     let check = MenuItem::with_id(app, "check", "Check now", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &check, &quit])?;
@@ -420,24 +441,20 @@ pub fn run() {
         ])
         .setup(|app| {
             app.manage(AutoCheckSignal::default());
-            app.manage(TrayRestore::default());
             start_auto_check(app.handle().clone());
             setup_tray(app)?;
+            apply_tray_visibility(app.handle());
 
             if let Some(window) = app.get_webview_window("main") {
                 let handle = app.handle().clone();
                 let tracked = window.clone();
                 window.on_window_event(move |event| {
                     match event {
-                        WindowEvent::Resized(_) => {
-                            if tracked.is_minimized().unwrap_or(false)
-                                && read_state(&handle).settings.minimize_to_tray
-                                && !handle.state::<TrayRestore>().0.load(Ordering::SeqCst)
-                            {
-                                let _ = tracked.hide();
-                            }
-                        }
                         WindowEvent::CloseRequested { .. } => {
+                            if tracked.is_minimized().unwrap_or(false) {
+                                return;
+                            }
+
                             let maximized = tracked.is_maximized().unwrap_or(false);
                             let mut state = read_state(&handle);
 
@@ -456,13 +473,19 @@ pub fn run() {
                             } else if let (Ok(position), Ok(size)) =
                                 (tracked.outer_position(), tracked.inner_size())
                             {
-                                state.window = Some(WindowState {
+                                let candidate = WindowState {
                                     x: position.x,
                                     y: position.y,
                                     width: size.width,
                                     height: size.height,
                                     maximized: false,
-                                });
+                                };
+                                if candidate.width >= 200
+                                    && candidate.height >= 200
+                                    && window_state_on_screen(&handle, &candidate)
+                                {
+                                    state.window = Some(candidate);
+                                }
                             }
 
                             let _ = write_state(&handle, &state);

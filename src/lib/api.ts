@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 10,
   notifyOnChange: true,
   showAutoChecks: true,
-  minimizeToTray: true,
+  minimizeToTray: false,
 };
 
 export const INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
