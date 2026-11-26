@@ -14,7 +14,10 @@
     "core:window:allow-set-position",
     "core:window:allow-is-maximized",
     "core:window:allow-show",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "clipboard-manager:allow-write-text",
+    "notification:default",
     "opener:default"
   ]
 }

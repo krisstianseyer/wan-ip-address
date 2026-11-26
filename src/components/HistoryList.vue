@@ -4,6 +4,7 @@ import { relativeTime, type HistoryEntry } from "../lib/api";
 
 const props = defineProps<{
   history: HistoryEntry[];
+  hiddenAutoCount: number;
   copiedId: string | null;
   confirmingClear: boolean;
 }>();
@@ -137,12 +138,20 @@ const tabs = [
         </svg>
       </div>
       <p class="text-[12.5px] font-medium text-muted">
-        {{ filter === "all" ? "No history yet" : `No IPv${filter} addresses` }}
+        {{
+          filter === "all"
+            ? hiddenAutoCount
+              ? "Automatic checks hidden"
+              : "No history yet"
+            : `No IPv${filter} addresses`
+        }}
       </p>
       <p class="mt-0.5 text-[11.5px] text-faint">
         {{
           filter === "all"
-            ? "Checks are saved automatically."
+            ? hiddenAutoCount
+              ? "Turn on auto-checks in Settings to list them here."
+              : "Checks are saved automatically."
             : "Try another filter or check again."
         }}
       </p>

@@ -8,12 +8,16 @@ A tiny Windows desktop app that shows your public WAN IP address, copies it in o
 - Vue 3 + TypeScript + Vite
 - Tailwind CSS v4, Verdana
 - Public lookup via `api.ipify.org` with `api64.ipify.org` fallback
+- Native notifications via `tauri-plugin-notification`
 
 ## Features
 
 - Public IPv4 or IPv6 with source label
 - One-click copy, `Ctrl+Shift+C`
 - Refresh via button or `Ctrl+R`
+- Optional automatic checks every 5, 10, 15, 30 or 60 minutes
+- Windows notification and in-app banner when the address changes
+- Settings to show or hide automatically checked addresses in History
 - Local history (last 50, IPv4/IPv6 filter), stored in the app data folder
 - GitHub repository link, opened in the default browser
 - Custom frameless title bar with version chip, remembered window size and position
@@ -34,5 +38,5 @@ npm run tauri build
 
 Outputs:
 
-- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.0.4_x64-setup.exe`
+- Installer: `src-tauri/target/release/bundle/nsis/WAN IP Address_1.1.0_x64-setup.exe`
 - Portable: `src-tauri/target/release/wan-ip-address.exe`

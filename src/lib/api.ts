@@ -9,6 +9,7 @@ export interface IpInfo {
 
 export interface HistoryEntry extends IpInfo {
   id: string;
+  auto: boolean;
 }
 
 export interface WindowState {
@@ -26,6 +27,32 @@ export interface LookupResult {
   checkedAt: string;
 }
 
+export interface Settings {
+  autoCheck: boolean;
+  intervalMinutes: number;
+  notifyOnChange: boolean;
+  showAutoChecks: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  autoCheck: false,
+  intervalMinutes: 10,
+  notifyOnChange: true,
+  showAutoChecks: true,
+};
+
+export const INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
+
+export interface AutoCheckEvent {
+  result: LookupResult;
+  changed: boolean;
+  previous: string | null;
+}
+
+export const AUTO_CHECK_EVENT = "ip://auto-check";
+
+export const HISTORY_LIMIT = 50;
+
 export const isTauri = "__TAURI_INTERNALS__" in window;
 
 export const REPO_URL = "https://github.com/krisstianseyer/wan-ip-address";
@@ -41,6 +68,7 @@ export async function openRepo(): Promise<void> {
 }
 
 const PREVIEW_KEY = "wan-ip-address:history";
+const SETTINGS_KEY = "wan-ip-address:settings";
 
 function previewHistory(): HistoryEntry[] {
   try {
@@ -77,22 +105,40 @@ export async function loadHistory(): Promise<HistoryEntry[]> {
   return previewHistory();
 }
 
-export async function recordIp(entry: LookupResult): Promise<HistoryEntry[]> {
-  if (isTauri) return invoke<HistoryEntry[]>("record_ip", { entry });
+export async function recordIp(entry: LookupResult, auto = false): Promise<HistoryEntry[]> {
+  if (isTauri) return invoke<HistoryEntry[]>("record_ip", { entry, auto });
 
   const history = previewHistory();
   const id = `${entry.checkedAt}-${entry.ip}`;
   if (history[0]?.ip === entry.ip) {
     Object.assign(history[0], entry, { id });
+    if (!auto) history[0].auto = false;
   } else {
-    history.unshift({ id, ...entry });
+    history.unshift({ id, auto, ...entry });
   }
-  return savePreview(history.slice(0, 50));
+  return savePreview(history.slice(0, HISTORY_LIMIT));
 }
 
 export async function clearHistory(): Promise<void> {
   if (isTauri) return invoke("clear_history");
   localStorage.removeItem(PREVIEW_KEY);
+}
+
+export async function loadSettings(): Promise<Settings> {
+  if (isTauri) return { ...DEFAULT_SETTINGS, ...(await invoke<Settings>("load_settings")) };
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+  } catch {
+    /* fall back to defaults */
+  }
+  return { ...DEFAULT_SETTINGS };
+}
+
+export async function saveSettings(settings: Settings): Promise<Settings> {
+  if (isTauri) return invoke<Settings>("save_settings", { settings });
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  return settings;
 }
 
 export async function getWindowState(): Promise<WindowState | null> {

@@ -1,26 +1,39 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import TitleBar from "./components/TitleBar.vue";
 import HistoryList from "./components/HistoryList.vue";
+import SettingsPanel from "./components/SettingsPanel.vue";
 import {
+  AUTO_CHECK_EVENT,
   clearHistory,
+  DEFAULT_SETTINGS,
   getWindowState,
+  HISTORY_LIMIT,
   isTauri,
   loadHistory,
+  loadSettings,
   lookupIp,
   openRepo,
   recordIp,
   REPO_LABEL,
+  saveSettings,
   timeLabel,
+  type AutoCheckEvent,
   type HistoryEntry,
   type LookupResult,
+  type Settings,
 } from "./lib/api";
 
 const ip = ref<LookupResult | null>(null);
 const history = ref<HistoryEntry[]>([]);
+const settings = ref<Settings>({ ...DEFAULT_SETTINGS });
+const settingsOpen = ref(false);
+const savingSettings = ref(false);
+const changeNotice = ref<{ previous: string | null; current: string } | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const copiedMain = ref(false);
@@ -30,6 +43,15 @@ const confirmingClear = ref(false);
 const win = isTauri ? getCurrentWindow() : null;
 let copyTimer: number | undefined;
 let clearTimer: number | undefined;
+let changeTimer: number | undefined;
+let unlistenAuto: UnlistenFn | null = null;
+let saveToken = 0;
+
+const visibleHistory = computed(() =>
+  settings.value.showAutoChecks ? history.value : history.value.filter((entry) => !entry.auto),
+);
+
+const hiddenAutoCount = computed(() => history.value.length - visibleHistory.value.length);
 
 const ipSize = computed(() => {
   const length = ip.value?.ip.length ?? 0;
@@ -64,6 +86,51 @@ async function check(): Promise<void> {
   } finally {
     loading.value = false;
   }
+}
+
+function showChange(previous: string | null, current: string): void {
+  changeNotice.value = { previous, current };
+  window.clearTimeout(changeTimer);
+  changeTimer = window.setTimeout(() => (changeNotice.value = null), 12_000);
+}
+
+function dismissChange(): void {
+  changeNotice.value = null;
+  window.clearTimeout(changeTimer);
+}
+
+function openSettings(): void {
+  settingsOpen.value = true;
+}
+
+function closeSettings(): void {
+  settingsOpen.value = false;
+}
+
+async function updateSettings(patch: Partial<Settings>): Promise<void> {
+  const next = { ...settings.value, ...patch };
+  settings.value = next;
+  const token = ++saveToken;
+  savingSettings.value = true;
+  try {
+    const saved = await saveSettings(next);
+    if (token === saveToken) settings.value = saved;
+  } catch {
+    /* keep the local preference if the state file cannot be written */
+  } finally {
+    if (token === saveToken) savingSettings.value = false;
+  }
+}
+
+async function onAutoCheck(event: { payload: AutoCheckEvent }): Promise<void> {
+  ip.value = event.payload.result;
+  error.value = null;
+  try {
+    history.value = await loadHistory();
+  } catch {
+    /* keep the current list if the state file cannot be read */
+  }
+  if (event.payload.changed) showChange(event.payload.previous, event.payload.result.ip);
 }
 
 async function copy(text: string): Promise<boolean> {
@@ -116,6 +183,10 @@ async function clearAll(): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape" && settingsOpen.value) {
+    closeSettings();
+    return;
+  }
   const mod = event.ctrlKey || event.metaKey;
   if (mod && event.key.toLowerCase() === "r") {
     event.preventDefault();
@@ -145,7 +216,28 @@ onMounted(async () => {
     }
   }
 
-  history.value = await loadHistory();
+  try {
+    settings.value = await loadSettings();
+  } catch {
+    /* keep defaults */
+  }
+
+  try {
+    history.value = await loadHistory();
+  } catch {
+    /* start with an empty list */
+  }
+
+  if (isTauri) {
+    try {
+      unlistenAuto = await listen<AutoCheckEvent>(AUTO_CHECK_EVENT, (event) => {
+        void onAutoCheck(event);
+      });
+    } catch {
+      /* auto-check updates still land in the state file */
+    }
+  }
+
   void check();
 });
 
@@ -153,6 +245,8 @@ onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
   window.clearTimeout(copyTimer);
   window.clearTimeout(clearTimer);
+  window.clearTimeout(changeTimer);
+  unlistenAuto?.();
 });
 </script>
 
@@ -165,6 +259,7 @@ onUnmounted(() => {
     <main
       class="mx-1.5 mb-1.5 flex min-h-0 flex-1 flex-col rounded-[20px] border border-line bg-panel px-5 pb-3.5 pt-4"
     >
+      <template v-if="!settingsOpen">
       <div class="flex items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-1.5 text-[11.5px]">
           <span
@@ -184,26 +279,92 @@ onUnmounted(() => {
           </template>
         </div>
 
+        <div class="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            aria-label="Refresh"
+            title="Refresh (Ctrl+R)"
+            class="grid h-8 w-8 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft hover:text-brand disabled:opacity-50"
+            :disabled="loading"
+            @click="check"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              class="h-3.5 w-3.5"
+              :class="{ 'animate-spin': loading }"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20.5 12a8.5 8.5 0 1 1-2.49-6.01" />
+              <path d="M20.5 4v5h-5" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            class="grid h-8 w-8 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft hover:text-brand"
+            @click="openSettings"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              class="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="changeNotice"
+        class="mt-3 flex items-start gap-2 rounded-xl border border-brand-line bg-brand-soft px-3 py-2"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="mt-px h-3.5 w-3.5 shrink-0 text-brand"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8v5" />
+          <circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] font-medium text-brand-strong">WAN IP changed</p>
+          <p class="mt-0.5 break-all font-mono text-[10.5px] leading-4 text-brand">
+            {{ changeNotice.previous ?? "Previous address" }} → {{ changeNotice.current }}
+          </p>
+        </div>
         <button
           type="button"
-          aria-label="Refresh"
-          title="Refresh (Ctrl+R)"
-          class="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-line bg-white text-muted transition-colors duration-100 hover:border-brand-line hover:bg-brand-soft hover:text-brand disabled:opacity-50"
-          :disabled="loading"
-          @click="check"
+          aria-label="Dismiss IP change notice"
+          class="grid h-5 w-5 shrink-0 place-items-center rounded-md text-brand/70 transition-colors duration-100 hover:bg-white hover:text-brand"
+          @click="dismissChange"
         >
           <svg
             viewBox="0 0 24 24"
-            class="h-3.5 w-3.5"
-            :class="{ 'animate-spin': loading }"
+            class="h-3 w-3"
             fill="none"
             stroke="currentColor"
-            stroke-width="1.6"
+            stroke-width="1.7"
             stroke-linecap="round"
-            stroke-linejoin="round"
           >
-            <path d="M20.5 12a8.5 8.5 0 1 1-2.49-6.01" />
-            <path d="M20.5 4v5h-5" />
+            <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
       </div>
@@ -286,7 +447,8 @@ onUnmounted(() => {
 
       <div class="mt-4 flex min-h-0 flex-1 flex-col">
         <HistoryList
-          :history="history"
+          :history="visibleHistory"
+          :hidden-auto-count="hiddenAutoCount"
           :copied-id="copiedId"
           :confirming-clear="confirmingClear"
           @copy="copyEntry"
@@ -305,7 +467,15 @@ onUnmounted(() => {
           </svg>
           Stored on this device
         </span>
-        <span class="tabular-nums text-brand">{{ history.length }}/50 saved</span>
+        <span
+          class="tabular-nums text-brand"
+          :title="
+            hiddenAutoCount
+              ? `${hiddenAutoCount} automatic check${hiddenAutoCount === 1 ? '' : 's'} hidden by settings`
+              : undefined
+          "
+          >{{ visibleHistory.length }}/{{ HISTORY_LIMIT }} saved</span
+        >
       </div>
 
       <div class="mt-2 shrink-0">
@@ -318,6 +488,15 @@ onUnmounted(() => {
           {{ REPO_LABEL }}
         </button>
       </div>
+      </template>
+
+      <SettingsPanel
+        v-else
+        :settings="settings"
+        :saving="savingSettings"
+        @close="closeSettings"
+        @update="updateSettings"
+      />
     </main>
   </div>
 </template>

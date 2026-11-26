@@ -4,12 +4,15 @@ use std::time::Duration;
 
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri_plugin_notification::NotificationExt;
 
 const SOURCES: [&str; 2] = [
     "https://api.ipify.org?format=json",
     "https://api64.ipify.org?format=json",
 ];
+
+const HISTORY_LIMIT: usize = 50;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +31,8 @@ pub struct HistoryEntry {
     pub version: u8,
     pub source: String,
     pub checked_at: String,
+    #[serde(default)]
+    pub auto: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,11 +45,57 @@ pub struct WindowState {
     pub maximized: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    pub auto_check: bool,
+    pub interval_minutes: u32,
+    pub notify_on_change: bool,
+    pub show_auto_checks: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            auto_check: false,
+            interval_minutes: 10,
+            notify_on_change: true,
+            show_auto_checks: true,
+        }
+    }
+}
+
+impl Settings {
+    fn normalized(self) -> Self {
+        Self {
+            interval_minutes: self.interval_minutes.clamp(1, 1440),
+            ..self
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct Persisted {
     history: Vec<HistoryEntry>,
     window: Option<WindowState>,
+    settings: Settings,
+}
+
+struct AutoCheckSignal(tokio::sync::Notify);
+
+impl Default for AutoCheckSignal {
+    fn default() -> Self {
+        Self(tokio::sync::Notify::new())
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AutoCheckEvent {
+    result: LookupResult,
+    changed: bool,
+    previous: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -87,8 +138,7 @@ fn source_host(url: &str) -> String {
         .to_string()
 }
 
-#[tauri::command]
-async fn lookup_ip() -> Result<LookupResult, String> {
+async fn fetch_public_ip() -> Result<LookupResult, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .user_agent(format!("wan-ip-address/{}", env!("CARGO_PKG_VERSION")))
@@ -124,39 +174,124 @@ async fn lookup_ip() -> Result<LookupResult, String> {
 }
 
 #[tauri::command]
+async fn lookup_ip() -> Result<LookupResult, String> {
+    fetch_public_ip().await
+}
+
+fn push_entry(history: &mut Vec<HistoryEntry>, entry: &LookupResult, auto: bool) {
+    let id = format!("{}-{}", entry.checked_at, entry.ip);
+
+    if let Some(latest) = history.first_mut() {
+        if latest.ip == entry.ip {
+            latest.id = id;
+            latest.checked_at = entry.checked_at.clone();
+            latest.source = entry.source.clone();
+            latest.version = entry.version;
+            if !auto {
+                latest.auto = false;
+            }
+            return;
+        }
+    }
+
+    history.insert(
+        0,
+        HistoryEntry {
+            id,
+            ip: entry.ip.clone(),
+            version: entry.version,
+            source: entry.source.clone(),
+            checked_at: entry.checked_at.clone(),
+            auto,
+        },
+    );
+    history.truncate(HISTORY_LIMIT);
+}
+
+#[tauri::command]
 fn load_history(app: AppHandle) -> Vec<HistoryEntry> {
     read_state(&app).history
 }
 
 #[tauri::command]
-fn record_ip(app: AppHandle, entry: LookupResult) -> Result<Vec<HistoryEntry>, String> {
+fn record_ip(app: AppHandle, entry: LookupResult, auto: bool) -> Result<Vec<HistoryEntry>, String> {
     let mut state = read_state(&app);
-    let id = format!("{}-{}", entry.checked_at, entry.ip);
-
-    if let Some(latest) = state.history.first_mut() {
-        if latest.ip == entry.ip {
-            latest.id = id;
-            latest.checked_at = entry.checked_at;
-            latest.source = entry.source;
-            latest.version = entry.version;
-            write_state(&app, &state)?;
-            return Ok(state.history);
-        }
-    }
-
-    state.history.insert(
-        0,
-        HistoryEntry {
-            id,
-            ip: entry.ip,
-            version: entry.version,
-            source: entry.source,
-            checked_at: entry.checked_at,
-        },
-    );
-    state.history.truncate(50);
+    push_entry(&mut state.history, &entry, auto);
     write_state(&app, &state)?;
     Ok(state.history)
+}
+
+#[tauri::command]
+fn load_settings(app: AppHandle) -> Settings {
+    read_state(&app).settings.normalized()
+}
+
+#[tauri::command]
+fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
+    let settings = settings.normalized();
+    let mut state = read_state(&app);
+    state.settings = settings.clone();
+    write_state(&app, &state)?;
+    app.state::<AutoCheckSignal>().0.notify_one();
+    Ok(settings)
+}
+
+async fn auto_check_now(app: &AppHandle) {
+    let Ok(result) = fetch_public_ip().await else {
+        return;
+    };
+
+    let mut state = read_state(app);
+    let previous = state.history.first().map(|entry| entry.ip.clone());
+    let changed = previous.as_deref().is_some_and(|ip| ip != result.ip);
+
+    push_entry(&mut state.history, &result, true);
+    let _ = write_state(app, &state);
+
+    if changed && state.settings.notify_on_change {
+        let body = match &previous {
+            Some(old) => format!("{}  →  {}", old, result.ip),
+            None => result.ip.clone(),
+        };
+        let _ = app
+            .notification()
+            .builder()
+            .title("WAN IP address changed")
+            .body(body)
+            .show();
+    }
+
+    let _ = app.emit(
+        "ip://auto-check",
+        AutoCheckEvent {
+            result,
+            changed,
+            previous,
+        },
+    );
+}
+
+fn start_auto_check(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let settings = read_state(&app).settings;
+            let wait = if settings.auto_check {
+                Duration::from_secs(settings.interval_minutes.max(1) as u64 * 60)
+            } else {
+                Duration::from_secs(3600)
+            };
+
+            let signal = app.state::<AutoCheckSignal>();
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => {
+                    if read_state(&app).settings.auto_check {
+                        auto_check_now(&app).await;
+                    }
+                }
+                _ = signal.0.notified() => {}
+            }
+        }
+    });
 }
 
 #[tauri::command]
@@ -175,15 +310,21 @@ fn get_window_state(app: AppHandle) -> Option<WindowState> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             lookup_ip,
             load_history,
             record_ip,
             clear_history,
-            get_window_state
+            get_window_state,
+            load_settings,
+            save_settings
         ])
         .setup(|app| {
+            app.manage(AutoCheckSignal::default());
+            start_auto_check(app.handle().clone());
+
             if let Some(window) = app.get_webview_window("main") {
                 let handle = app.handle().clone();
                 let tracked = window.clone();
